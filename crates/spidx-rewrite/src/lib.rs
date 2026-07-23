@@ -11,6 +11,7 @@ use spidx_canon::canonicalize;
 use spidx_guard::{Guard, GuardContext, GuardResult};
 use spidx_proof::Proof;
 use thiserror::Error;
+use bincode;
 use std::collections::BTreeMap;
 
 #[derive(Error, Debug)]

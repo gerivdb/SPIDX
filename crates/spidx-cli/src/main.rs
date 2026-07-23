@@ -97,12 +97,16 @@ fn cmd_apply(graph_path: PathBuf, patch_path: PathBuf, output_path: PathBuf) -> 
             }
             PatchOp::ModifyNodePayload { id, new_payload } => {
                 if let Some(node) = graph.nodes.get_mut(id) {
-                    node.payload = new_payload.clone();
+                    if let Ok(attrs) = bincode::deserialize::<NodeAttrs>(new_payload) {
+                        node.attrs = attrs;
+                    }
                 }
             }
             PatchOp::ModifyEdgePayload { id, new_payload } => {
                 if let Some(edge) = graph.edges.get_mut(id) {
-                    edge.payload = new_payload.clone();
+                    if let Ok(attrs) = bincode::deserialize::<NodeAttrs>(new_payload) {
+                        edge.attrs = attrs;
+                    }
                 }
             }
             _ => {}

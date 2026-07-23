@@ -9,7 +9,7 @@
 use spidx_core::{Graph, Node, Edge, Zone, NodeId, EdgeId, ZoneId, Hash, NodeAttrs};
 use blake3;
 use bincode;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Canonicalisateur d'état - transforme un graphe brut en forme canonique
 pub struct Canonicalizer {
@@ -53,8 +53,7 @@ impl Canonicalizer {
     }
     
     fn remap_node_ids(&mut self, graph: &mut Graph) {
-        // Collecter tous les nœuds avec leur hash d'attributs
-        let mut nodes: Vec<_> = graph.nodes.drain().collect();
+        let mut nodes: Vec<_> = std::mem::take(&mut graph.nodes).into_iter().collect();
         
         // Trier par hash d'attributs (déterministe)
         nodes.sort_by(|(_, a), (_, b)| {
@@ -93,7 +92,7 @@ impl Canonicalizer {
     }
     
     fn remap_edge_ids(&mut self, graph: &mut Graph) {
-        let mut edges: Vec<_> = graph.edges.drain().collect();
+        let mut edges: Vec<_> = std::mem::take(&mut graph.edges).into_iter().collect();
         
         edges.sort_by(|(_, a), (_, b)| {
             // Trier par (src, dst, label, hash_attrs)
@@ -123,21 +122,13 @@ impl Canonicalizer {
             // Remapper src/dst
             edge.src = *self.node_id_map.get(&edge.src).unwrap_or(&edge.src);
             edge.dst = *self.node_id_map.get(&edge.dst).unwrap_or(&edge.dst);
-            // Remapper zone
-            if let Some(zone) = edge.zone {
-                edge.zone = Some(*self.zone_id_map.entry(zone).or_insert_with(|| {
-                    let zid = ZoneId(self.next_zone_id);
-                    self.next_zone_id += 1;
-                    zid
-                }));
-            }
             new_edges.insert(new_id, edge);
         }
         graph.edges = new_edges;
     }
     
     fn remap_zone_ids(&mut self, graph: &mut Graph) {
-        let mut zones: Vec<_> = graph.zones.drain().collect();
+        let mut zones: Vec<_> = std::mem::take(&mut graph.zones).into_iter().collect();
         zones.sort_by_key(|(_, z)| z.id);
         
         let mut new_zones = BTreeMap::new();
@@ -181,10 +172,20 @@ impl Canonicalizer {
         }
         // Hash zones (ordre topologique pour gérer parents)
         let mut zone_order: Vec<_> = graph.zones.keys().copied().collect();
-        zone_order.sort_by_key(|z| graph.zones[z].depth());
-        for zid in zone_order {
+        zone_order.sort_by_key(|z| graph.zones[z].depth(&graph.zones));
+        
+        // Pré-calculer les hashs de zone dans l'ordre topologique
+        let mut zone_hashes: std::collections::BTreeMap<ZoneId, Hash> = std::collections::BTreeMap::new();
+        for zid in &zone_order {
+            let zone = &graph.zones[zid];
+            let parent_hash = zone.parent.and_then(|p| zone_hashes.get(&p).copied());
+            zone_hashes.insert(*zid, self.hash_zone(zone, parent_hash));
+        }
+        
+        // Appliquer les hashs
+        for (zid, hash) in zone_hashes {
             if let Some(zone) = graph.zones.get_mut(&zid) {
-                zone.hash = Some(self.hash_zone(zone, &graph.zones));
+                zone.hash = Some(hash);
             }
         }
     }
@@ -213,7 +214,7 @@ impl Canonicalizer {
         Hash::of(&ce)
     }
     
-    fn hash_zone(&self, zone: &Zone, all_zones: &BTreeMap<ZoneId, Zone>) -> Hash {
+    fn hash_zone(&self, zone: &Zone, parent_hash: Option<Hash>) -> Hash {
         #[derive(serde::Serialize)]
         struct CanonicalZone<'a> {
             id: ZoneId,
@@ -222,7 +223,6 @@ impl Canonicalizer {
             edge_ids: &'a BTreeSet<EdgeId>,
             parent_hash: Option<Hash>,
         }
-        let parent_hash = zone.parent.and_then(|p| all_zones.get(&p).and_then(|z| z.hash));
         let cz = CanonicalZone {
             id: zone.id,
             name: &zone.name,
@@ -247,7 +247,7 @@ impl Canonicalizer {
         for zone in graph.zones.values() {
             hasher.update(&bincode::serialize(&zone.hash.unwrap()).unwrap());
         }
-        Hash::from(hasher.finalize().as_bytes())
+        Hash(*hasher.finalize().as_bytes())
     }
 }
 

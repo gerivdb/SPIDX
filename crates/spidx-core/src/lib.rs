@@ -17,6 +17,12 @@ impl NodeId {
     pub const fn new(id: u64) -> Self { Self(id) }
 }
 
+impl std::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "n{}", self.0)
+    }
+}
+
 /// Identifiant unique et canonique d'une arête
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct EdgeId(pub u64);
@@ -25,9 +31,25 @@ impl EdgeId {
     pub const fn new(id: u64) -> Self { Self(id) }
 }
 
+impl std::fmt::Display for EdgeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "e{}", self.0)
+    }
+}
+
 /// Identifiant de zone (sous-graphe nommé)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ZoneId(pub u64);
+
+impl ZoneId {
+    pub const fn new(id: u64) -> Self { Self(id) }
+}
+
+impl std::fmt::Display for ZoneId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "z{}", self.0)
+    }
+}
 
 /// Hash Blake3 de 32 octets - utilisé pour tous les hashs canoniques
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -47,6 +69,10 @@ impl Hash {
     }
 }
 
+impl Default for Hash {
+    fn default() -> Self { Self::zero() }
+}
+
 /// Attributs de nœud (clé-valeur typés)
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct NodeAttrs(pub BTreeMap<String, AttrValue>);
@@ -60,6 +86,37 @@ pub enum AttrValue {
     String(String),
     Bytes(Vec<u8>),
     Hash(Hash),
+}
+
+/// Opération atomique d'un patch
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum PatchOp {
+    AddNode { id: NodeId, node: Node },
+    RemoveNode { id: NodeId },
+    AddEdge { id: EdgeId, edge: Edge },
+    RemoveEdge { id: EdgeId },
+    AddZone { id: ZoneId, zone: Zone },
+    RemoveZone { id: ZoneId },
+    ModifyNodePayload { id: NodeId, new_payload: Vec<u8> },
+    ModifyEdgePayload { id: EdgeId, new_payload: Vec<u8> },
+}
+
+/// Patch déterministe (séquence d'ops + hashs de bornes)
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Patch {
+    pub base_hash: Hash,
+    pub target_hash: Hash,
+    pub ops: Vec<PatchOp>,
+}
+
+impl Patch {
+    pub fn new(base_hash: Hash) -> Self {
+        Self { base_hash, target_hash: Hash::zero(), ops: Vec::new() }
+    }
+
+    pub fn hash(&self) -> Hash {
+        Hash::of(self)
+    }
 }
 
 /// Nœud du graphe
@@ -76,6 +133,10 @@ pub struct Node {
 impl Node {
     pub fn new(id: NodeId) -> Self {
         Self { id, zone: None, attrs: NodeAttrs(BTreeMap::new()), hash: None }
+    }
+    
+    pub fn attrs_hash(&self) -> Option<Hash> {
+        Some(Hash::of(&self.attrs))
     }
     
     pub fn with_attrs(mut self, attrs: NodeAttrs) -> Self {
@@ -102,6 +163,10 @@ pub struct Edge {
 impl Edge {
     pub fn new(id: EdgeId, src: NodeId, dst: NodeId, label: String) -> Self {
         Self { id, src, dst, label, attrs: NodeAttrs(BTreeMap::new()), hash: None }
+    }
+
+    pub fn attrs_hash(&self) -> Option<Hash> {
+        Some(Hash::of(&self.attrs))
     }
 }
 
@@ -168,20 +233,23 @@ impl Graph {
     
     pub fn add_node(&mut self, mut node: Node) -> NodeId {
         if node.id == NodeId(0) { node.id = self.alloc_node_id(); }
-        self.nodes.insert(node.id, node);
-        node.id
+        let id = node.id;
+        self.nodes.insert(id, node);
+        id
     }
     
     pub fn add_edge(&mut self, mut edge: Edge) -> EdgeId {
         if edge.id == EdgeId(0) { edge.id = self.alloc_edge_id(); }
-        self.edges.insert(edge.id, edge);
-        edge.id
+        let id = edge.id;
+        self.edges.insert(id, edge);
+        id
     }
     
     pub fn add_zone(&mut self, mut zone: Zone) -> ZoneId {
         if zone.id == ZoneId(0) { zone.id = self.alloc_zone_id(); }
-        self.zones.insert(zone.id, zone);
-        zone.id
+        let id = zone.id;
+        self.zones.insert(id, zone);
+        id
     }
     
     /// Canonicalise le graphe (trie, calcule hashs, produit root_hash)
@@ -228,6 +296,11 @@ impl Graph {
         self.root_hash.unwrap()
     }
     
+    /// Recompute root hash only (keeps existing canonicalization intact)
+    pub fn compute_root_hash(&mut self) -> Hash {
+        self.canonicalize()
+    }
+    
     /// Vérifie l'intégrité (hashs correspondants)
     pub fn verify(&self) -> Result<(), String> {
         let mut g = self.clone();
@@ -237,6 +310,10 @@ impl Graph {
         }
         Ok(())
     }
+}
+
+impl Default for Graph {
+    fn default() -> Self { Self::new() }
 }
 
 /// Structures pour canonicalisation (sans hash circulaire)
@@ -265,9 +342,25 @@ struct CanonicalZone<'a> {
     parent: Option<ZoneId>,
 }
 
-impl Default for Graph {
-    fn default() -> Self { Self::new() }
-}
+impl Zone {
+    pub fn root() -> Self {
+        Self {
+            id: ZoneId(0),
+            name: "root".into(),
+            node_ids: BTreeSet::new(),
+            edge_ids: BTreeSet::new(),
+            parent: None,
+            hash: None,
+        }
+    }
 
-// Re-exports publics
-pub use self::{Node, Edge, Zone, Graph, NodeId, EdgeId, ZoneId, Hash, NodeAttrs, AttrValue};
+    pub fn depth(&self, all_zones: &BTreeMap<ZoneId, Zone>) -> u32 {
+        match self.parent {
+            None => 0,
+            Some(pid) => match all_zones.get(&pid) {
+                Some(parent) => parent.depth(all_zones) + 1,
+                None => 0,
+            },
+        }
+    }
+}

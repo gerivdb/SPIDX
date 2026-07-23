@@ -545,6 +545,7 @@ name = "spidx-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bincode",
  "clap",
  "serde",
  "serde_json",
@@ -606,6 +607,7 @@ dependencies = [
 name = "spidx-rewrite"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "spidx-canon",
  "spidx-core",
  "spidx-guard",

@@ -9,3 +9,4 @@ spidx-canon = { path = "../spidx-canon" }
 spidx-guard = { path = "../spidx-guard" }
 spidx-proof = { path = "../spidx-proof" }
 thiserror = "1.0"
+bincode = "1.3"
