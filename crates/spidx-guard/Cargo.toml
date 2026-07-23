@@ -1,0 +1,8 @@
+[package]
+name = "spidx-guard"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+spidx-core = { path = "../spidx-core" }
+thiserror = "1.0"

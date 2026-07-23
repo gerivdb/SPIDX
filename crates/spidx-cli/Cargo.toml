@@ -1,0 +1,20 @@
+[package]
+name = "spidx-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "spidx"
+path = "src/main.rs"
+
+[dependencies]
+spidx-core = { path = "../spidx-core" }
+spidx-canon = { path = "../spidx-canon" }
+spidx-rewrite = { path = "../spidx-rewrite" }
+spidx-guard = { path = "../spidx-guard" }
+spidx-proof = { path = "../spidx-proof" }
+spidx-wal = { path = "../spidx-wal" }
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

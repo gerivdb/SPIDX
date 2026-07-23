@@ -1,0 +1,12 @@
+[package]
+name = "spidx-wal"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+spidx-core = { path = "../spidx-core" }
+spidx-proof = { path = "../spidx-proof" }
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+blake3 = "1.5"
+thiserror = "1.0"

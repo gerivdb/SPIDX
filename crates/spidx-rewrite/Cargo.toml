@@ -1,0 +1,11 @@
+[package]
+name = "spidx-rewrite"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+spidx-core = { path = "../spidx-core" }
+spidx-canon = { path = "../spidx-canon" }
+spidx-guard = { path = "../spidx-guard" }
+spidx-proof = { path = "../spidx-proof" }
+thiserror = "1.0"

@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/spidx-core",
+    "crates/spidx-canon",
+    "crates/spidx-rewrite",
+    "crates/spidx-guard",
+    "crates/spidx-proof",
+    "crates/spidx-wal",
+    "crates/spidx-cli",
+    "crates/spidx-fuzz",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "SPIDX - Spider Graph Rewriting Kernel (deterministic, pure, replayable)"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+blake3 = "1.5"
+thiserror = "1.0"
+arbitrary = "1.3"
+
+[profile.release]
+lto = true
+codegen-units = 1
