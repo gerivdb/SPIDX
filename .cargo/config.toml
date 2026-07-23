@@ -1,0 +1,5 @@
+[build]
+rustflags = ["-C", "target-cpu=westmere"]
+
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "target-cpu=westmere"]
