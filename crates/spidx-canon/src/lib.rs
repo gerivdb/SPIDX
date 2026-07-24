@@ -276,15 +276,15 @@ mod tests {
     #[test]
     fn test_canonicalization_deterministic() {
         let mut g1 = Graph::new();
-        let n1 = Node::new(NodeId(100), ZoneId(1), NodeAttrs::from([("type", AttrValue::String("test".into()))]));
-        let n2 = Node::new(NodeId(50), ZoneId(1), NodeAttrs::from([("type", AttrValue::String("test".into()))]));
+        let n1 = Node::new(NodeId(100)).with_attrs(NodeAttrs::from([("type", AttrValue::String("test".into()))]));
+        let n2 = Node::new(NodeId(50)).with_attrs(NodeAttrs::from([("type", AttrValue::String("test".into()))]));
         g1.add_node(n1);
         g1.add_node(n2);
         canonicalize(&mut g1);
         
         let mut g2 = Graph::new();
-        let n1 = Node::new(NodeId(50), ZoneId(1), NodeAttrs::from([("type", AttrValue::String("test".into()))]));
-        let n2 = Node::new(NodeId(100), ZoneId(1), NodeAttrs::from([("type", AttrValue::String("test".into()))]));
+        let n1 = Node::new(NodeId(50)).with_attrs(NodeAttrs::from([("type", AttrValue::String("test".into()))]));
+        let n2 = Node::new(NodeId(100)).with_attrs(NodeAttrs::from([("type", AttrValue::String("test".into()))]));
         g2.add_node(n1);
         g2.add_node(n2);
         canonicalize(&mut g2);

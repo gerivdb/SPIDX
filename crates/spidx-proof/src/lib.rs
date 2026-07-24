@@ -173,6 +173,11 @@ mod tests {
             patches.push(patch);
         }
         
-        assert!(chain.verify_chain(&Graph::new(), &patches));
+        // Rebuild initial graph for verification
+        let mut initial_g = Graph::new();
+        initial_g.add_node(Node::new(NodeId(1)));
+        initial_g.compute_root_hash();
+        
+        assert!(chain.verify_chain(&initial_g, &patches));
     }
 }

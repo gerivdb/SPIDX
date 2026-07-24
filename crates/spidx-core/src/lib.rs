@@ -77,6 +77,28 @@ impl Default for Hash {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct NodeAttrs(pub BTreeMap<String, AttrValue>);
 
+impl NodeAttrs {
+    pub fn new() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
+impl From<BTreeMap<String, AttrValue>> for NodeAttrs {
+    fn from(map: BTreeMap<String, AttrValue>) -> Self {
+        Self(map)
+    }
+}
+
+impl<const N: usize> From<[(&str, AttrValue); N]> for NodeAttrs {
+    fn from(arr: [(&str, AttrValue); N]) -> Self {
+        let mut map = BTreeMap::new();
+        for (k, v) in arr {
+            map.insert(k.to_string(), v);
+        }
+        Self(map)
+    }
+}
+
 /// Valeur d'attribut (typage simple pour canonicalisation)
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum AttrValue {
