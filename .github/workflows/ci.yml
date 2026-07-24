@@ -1,0 +1,47 @@
+name: SPIDX CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  RUSTFLAGS: "-C target-cpu=westmere"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-gnu
+          override: true
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Build (release)
+        run: cargo build --release --workspace
+
+      - name: Run tests
+        run: cargo test --workspace --verbose
+
+      - name: Smoke bench
+        run: cargo bench --workspace -- --verbose
+        continue-on-error: true
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: spidx-exe
+          path: target/release/spidx.exe
