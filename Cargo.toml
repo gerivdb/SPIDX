@@ -8,6 +8,8 @@ members = [
     "crates/spidx-proof",
     "crates/spidx-wal",
     "crates/spidx-cli",
+]
+exclude = [
     "crates/spidx-fuzz",
 ]
 

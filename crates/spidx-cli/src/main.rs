@@ -6,15 +6,19 @@
 //! - `spidx replay` : rejoue un WAL complet
 //! - `spidx diff` : diff entre deux graphes
 //! - `spidx canon` : canonicalise un graphe
+//! - `spidx gen` : génère un graphe de test
+//! - `spidx append` : ajoute une entrée WAL
+//! - `spidx gen-proof` : génère une preuve minimale depuis un patch
 
 use spidx_core::{Graph, Hash, Patch, PatchOp, Node, NodeId, Edge, EdgeId, ZoneId, NodeAttrs, AttrValue};
 use spidx_canon::canonicalize;
 use spidx_wal::{Wal, WalEntry};
-use spidx_proof::{Proof, ProofChain};
+use spidx_proof::Proof;
 use clap::{Parser, Subcommand};
 use anyhow::{Result, Context};
 use std::fs;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser)]
 #[command(name = "spidx", version, about = "SPIDX - Spider Graph Rewriting Kernel")]
@@ -58,6 +62,21 @@ enum Commands {
         #[arg(short, long)] output: PathBuf,
         #[arg(short, long, default_value = "10")] nodes: usize,
     },
+    /// Ajoute une entrée WAL
+    Append {
+        #[arg(short, long)] wal: PathBuf,
+        #[arg(short, long)] proof: PathBuf,
+        #[arg(short, long)] patch: PathBuf,
+    },
+    /// Génère une preuve minimale depuis un patch
+    GenProof {
+        #[arg(short, long)] patch: PathBuf,
+        #[arg(short, long)] output: PathBuf,
+        #[arg(short, long, default_value = "plix-import")] rule_id: String,
+        #[arg(short, long, default_value = "1")] rule_version: u32,
+        #[arg(short, long)] input_hash: Option<String>,
+        #[arg(short, long)] output_hash: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -70,6 +89,10 @@ fn main() -> Result<()> {
         Commands::Diff { graph1, graph2, output } => cmd_diff(graph1, graph2, output),
         Commands::Canon { input, output } => cmd_canon(input, output),
         Commands::Gen { output, nodes } => cmd_gen(output, nodes),
+        Commands::Append { wal, proof, patch } => cmd_append(wal, proof, patch),
+        Commands::GenProof { patch, output, rule_id, rule_version, input_hash, output_hash } => {
+            cmd_gen_proof(patch, output, rule_id, rule_version, input_hash, output_hash)
+        }
     }
 }
 
@@ -229,5 +252,61 @@ fn cmd_gen(output_path: PathBuf, num_nodes: usize) -> Result<()> {
     fs::write(&output_path, out_data)?;
     
     println!("Generated graph with {} nodes. Root hash: {:?}", num_nodes, graph.root_hash);
+    Ok(())
+}
+
+fn cmd_append(wal_path: PathBuf, proof_path: PathBuf, patch_path: PathBuf) -> Result<()> {
+    let proof_data = fs::read(&proof_path)?;
+    let proof: Proof = bincode::deserialize(&proof_data)?;
+    
+    let patch_data = fs::read(&patch_path)?;
+    let patch: Patch = bincode::deserialize(&patch_data)?;
+    
+    let mut wal = Wal::open(&wal_path, 1000)?;
+    let seq = wal.append(proof, patch)?;
+    println!("Appended WAL entry seq={}", seq);
+    Ok(())
+}
+
+fn cmd_gen_proof(
+    patch_path: PathBuf,
+    output_path: PathBuf,
+    rule_id: String,
+    rule_version: u32,
+    input_hash: Option<String>,
+    output_hash: Option<String>,
+) -> Result<()> {
+    let patch_data = fs::read(&patch_path)?;
+    let patch: Patch = bincode::deserialize(&patch_data)?;
+    
+    fn parse_hash(hex_str: String) -> Result<Hash> {
+        let bytes = hex::decode(hex_str).map_err(|e| anyhow::anyhow!(e))?;
+        let arr: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("hash must be 32 bytes"))?;
+        Ok(Hash::from_bytes(arr))
+    }
+    
+    let input_hash = match input_hash {
+        Some(h) => parse_hash(h)?,
+        None => patch.base_hash,
+    };
+    
+    let output_hash = match output_hash {
+        Some(h) => parse_hash(h)?,
+        None => patch.target_hash,
+    };
+    
+    let proof = Proof::new(
+        rule_id,
+        rule_version,
+        input_hash,
+        patch.hash(),
+        output_hash,
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+    );
+    
+    let out_data = bincode::serialize(&proof)?;
+    fs::write(&output_path, out_data)?;
+    
+    println!("Generated proof for rule={} v={}", proof.rule_id, proof.rule_version);
     Ok(())
 }
