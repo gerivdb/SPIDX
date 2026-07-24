@@ -1,0 +1,52 @@
+name: spidx
+version: "1.0"
+description: "SPIDX CI: build, test, lint, bench"
+nexus_status: ACTIVE
+on_failure: abort
+max_workers: 2
+
+parallel_groups:
+  - [lint, clippy]
+
+steps:
+  - name: env-check
+    description: "Verify Rust toolchain"
+    command: cargo --version
+    on_failure: abort
+    retry: 0
+
+  - name: lint
+    description: "cargo fmt --check"
+    command: cargo fmt --all -- --check
+    depends_on: [env-check]
+    on_failure: warn
+    retry: 0
+
+  - name: clippy
+    description: "cargo clippy -D warnings"
+    command: cargo clippy --workspace -- -D warnings
+    depends_on: [env-check]
+    on_failure: warn
+    retry: 0
+
+  - name: build
+    description: "cargo build --release"
+    command: cargo build --release --workspace
+    depends_on: [lint, clippy]
+    on_failure: abort
+    retry: 0
+
+  - name: test
+    description: "cargo test --workspace"
+    command: cargo test --workspace --verbose
+    depends_on: [build]
+    on_failure: abort
+    retry: 1
+
+  - name: bench
+    description: "cargo bench (smoke)"
+    command: cargo bench --workspace -- --verbose
+    depends_on: [test]
+    on_failure: notify
+    retry: 0
+    when: "not dry_run"
